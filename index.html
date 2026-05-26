@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Advanced Inventory Tracker</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
+
+    .form-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    input {
+      padding: 10px;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    button {
+      padding: 10px 15px;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      color: white;
+      font-weight: bold;
+    }
+
+    .primary-btn {
+      background: #007bff;
+    }
+
+    .sell-btn {
+      background: #28a745;
+    }
+
+    .delete-btn {
+      background: #dc3545;
+    }
+
+    .export-btn {
+      background: #6f42c1;
+    }
+
+    .clear-btn {
+      background: #ff6600;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      text-align: center;
+    }
+
+    .good {
+      background-color: #c8f7c5;
+    }
+
+    .low {
+      background-color: #fff3b0;
+    }
+
+    .critical {
+      background-color: #ffb3b3;
+    }
+
+    .summary {
+      margin: 20px 0;
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    @media (max-width: 700px) {
+      .form-group {
+        flex-direction: column;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>Advanced Inventory Tracker</h1>
+
+  <div class="form-group">
+    <input type="text" id="itemName" placeholder="Item Name">
+    <input type="number" id="itemQty" placeholder="Quantity">
+    <input type="number" id="itemPrice" placeholder="Price">
+    <button class="primary-btn" onclick="addItem()">Add Item</button>
+  </div>
+
+  <div class="button-group">
+    <button class="export-btn" onclick="exportInventoryCSV()">
+      Export Inventory CSV
+    </button>
+
+    <button class="export-btn" onclick="exportSalesCSV()">
+      Export Sales History CSV
+    </button>
+
+    <button class="clear-btn" onclick="clearHistory()">
+      Clear Sales History
+    </button>
+  </div>
+
+  <div class="summary" id="totalValue">
+    Total Stock Value: $0
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Quantity</th>
+        <th>Price</th>
+        <th>Total Value</th>
+        <th>Status</th>
+        <th>Sell Qty</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+
+    <tbody id="inventoryTable"></tbody>
+  </table>
+
+  <h2>Sales History</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Item</th>
+        <th>Qty Sold</th>
+        <th>Price</th>
+        <th>Total Sale</th>
+      </tr>
+    </thead>
+
+    <tbody id="salesHistoryTable"></tbody>
+  </table>
+
+</div>
+
+<script>
+
+  let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
+  let salesHistory = JSON.parse(localStorage.getItem("salesHistory")) || [];
+
+  function saveData() {
+    localStorage.setItem("inventory", JSON.stringify(inventory));
+    localStorage.setItem("salesHistory", JSON.stringify(salesHistory));
+  }
+
+  function getStatusClass(qty) {
+    if (qty <= 5) return "critical";
+    if (qty <= 15) return "low";
+    return "good";
+  }
+
+  function getStatusText(qty) {
+    if (qty <= 5) return "Critical";
+    if (qty <= 15) return "Low";
+    return "Healthy";
+  }
+
+  function addItem() {
+
+    const name = document.getElementById("itemName").value.trim();
+    const qty = parseInt(document.getElementById("itemQty").value);
+    const price = parseFloat(document.getElementById("itemPrice").value);
+
+    if (!name || isNaN(qty) || isNaN(price)) {
+      alert("Please enter valid values.");
+      return;
+    }
+
+    inventory.push({
+      name,
+      quantity: qty,
+      price
+    });
+
+    saveData();
+    renderInventory();
+
+    document.getElementById("itemName").value = "";
+    document.getElementById("itemQty").value = "";
+    document.getElementById("itemPrice").value = "";
+  }
+
+  function sellItem(index) {
+
+    const sellQty = parseInt(document.getElementById(`sell-${index}`).value);
+
+    if (isNaN(sellQty) || sellQty <= 0) {
+      alert("Invalid quantity.");
+      return;
+    }
+
+    if (sellQty > inventory[index].quantity) {
+      alert("Not enough stock.");
+      return;
+    }
+
+    inventory[index].quantity -= sellQty;
+
+    salesHistory.push({
+      date: new Date().toLocaleString(),
+      item: inventory[index].name,
+      quantity: sellQty,
+      price: inventory[index].price,
+      total: sellQty * inventory[index].price
+    });
+
+    saveData();
+
+    renderInventory();
+    renderSalesHistory();
+  }
+
+  function deleteItem(index) {
+
+    if (confirm("Delete this item?")) {
+      inventory.splice(index, 1);
+      saveData();
+      renderInventory();
+    }
+  }
+
+  function clearHistory() {
+
+    if (salesHistory.length === 0) {
+      alert("Sales history is already empty.");
+      return;
+    }
+
+    const confirmClear = confirm(
+      "Are you sure you want to clear all sales history?"
+    );
+
+    if (confirmClear) {
+      salesHistory = [];
+      saveData();
+      renderSalesHistory();
+      alert("Sales history cleared.");
+    }
+  }
+
+  function renderInventory() {
+
+    const table = document.getElementById("inventoryTable");
+
+    table.innerHTML = "";
+
+    let totalStockValue = 0;
+
+    inventory.forEach((item, index) => {
+
+      const totalValue = item.quantity * item.price;
+
+      totalStockValue += totalValue;
+
+      const row = document.createElement("tr");
+
+      row.className = getStatusClass(item.quantity);
+
+      row.innerHTML = `
+        <td>${item.name}</td>
+        <td>${item.quantity}</td>
+        <td>$${item.price.toFixed(2)}</td>
+        <td>$${totalValue.toFixed(2)}</td>
+        <td>${getStatusText(item.quantity)}</td>
+
+        <td>
+          <input
+            type="number"
+            id="sell-${index}"
+            value="1"
+            min="1"
+            style="width:70px;"
+          >
+        </td>
+
+        <td>
+          <button class="sell-btn" onclick="sellItem(${index})">
+            Sell
+          </button>
+
+          <button class="delete-btn" onclick="deleteItem(${index})">
+            Delete
+          </button>
+        </td>
+      `;
+
+      table.appendChild(row);
+    });
+
+    document.getElementById("totalValue").innerHTML =
+      `Total Stock Value: $${totalStockValue.toFixed(2)}`;
+  }
+
+  function renderSalesHistory() {
+
+    const table = document.getElementById("salesHistoryTable");
+
+    table.innerHTML = "";
+
+    if (salesHistory.length === 0) {
+
+      table.innerHTML = `
+        <tr>
+          <td colspan="5">No sales history available.</td>
+        </tr>
+      `;
+
+      return;
+    }
+
+    salesHistory.forEach(sale => {
+
+      const row = document.createElement("tr");
+
+      row.innerHTML = `
+        <td>${sale.date}</td>
+        <td>${sale.item}</td>
+        <td>${sale.quantity}</td>
+        <td>$${sale.price.toFixed(2)}</td>
+        <td>$${sale.total.toFixed(2)}</td>
+      `;
+
+      table.appendChild(row);
+    });
+  }
+
+  function exportInventoryCSV() {
+
+    let csv =
+      "Item,Quantity,Price,Total Value\n";
+
+    inventory.forEach(item => {
+
+      csv += `${item.name},${item.quantity},${item.price},${item.quantity * item.price}\n`;
+    });
+
+    downloadCSV(csv, "inventory.csv");
+  }
+
+  function exportSalesCSV() {
+
+    let csv =
+      "Date,Item,Quantity,Price,Total Sale\n";
+
+    salesHistory.forEach(sale => {
+
+      csv += `${sale.date},${sale.item},${sale.quantity},${sale.price},${sale.total}\n`;
+    });
+
+    downloadCSV(csv, "sales_history.csv");
+  }
+
+  function downloadCSV(csv, filename) {
+
+    const blob = new Blob([csv], { type: "text/csv" });
+
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+
+    a.setAttribute("hidden", "");
+    a.setAttribute("href", url);
+    a.setAttribute("download", filename);
+
+    document.body.appendChild(a);
+
+    a.click();
+
+    document.body.removeChild(a);
+  }
+
+  renderInventory();
+  renderSalesHistory();
+
+</script>
+
+</body>
+</html>
